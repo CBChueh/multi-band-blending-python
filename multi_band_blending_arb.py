@@ -13,44 +13,50 @@ def preprocess(imgs, sep):
         sys.exit()
     subs=[[np.zeros(Shape)]*sep]*sep
     masks=subs
-    shape=Shape/sep
-    for ind, sub in enumerate(subs):
-        x=ind//sep
-        y=ind%sep
-        sub[x*shape:(x+1)*shape,y*shape:(y+1)*shape]=imgs[ind%2][x*shape:(x+1)*shape,y*shape:(y+1)*shape]
-        masks[x,y][x*shape:(x+1)*shape,y*shape:(y+1)*shape]=1
-    return subs, mask
+    shape=Shape[0]//sep
+    for indx, sub in enumerate(subs):
+        for indy, s in enumerate(sub):
+            s[indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]=imgs[indx%2][indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]
+            masks[indx][indy][indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]=1
+    return subs, masks
 
 def GaussianPyramid(masks, leveln):
     # return GPs: [imgs][levs]
-    GPs=[] 
-    for mask in masks:
-        GP = [mask]
-        for i in range(leveln - 1):
-            GP.append(cv2.pyrDown(GP[i]))
-        GPs.append(GP)
+    GPs=[]
+    for rmask in masks:
+        rGPs=[] 
+        for mask in rmask:
+            GP = [mask]
+            for i in range(leveln - 1):
+                GP.append(cv2.pyrDown(GP[i]))
+            rGPs.append(GP)
+        GPs.append(rGPs)
     return GPs
 
 
 def LaplacianPyramid(imgs, leveln):
     # return LPs: [imgs][levs]
-    LP = []
     LPs=[]
-    for img in imgs:
-        for i in range(leveln - 1):
-            next_img = cv2.pyrDown(img)
-            LP.append(img - cv2.pyrUp(next_img, img.shape[1::-1]))
-            img = next_img
-        LP.append(img)
-        LPs.append(LP)
+    for rimg in imgs:
+        for img in rimg:
+            rLPs=[]
+            LP = []
+            for i in range(leveln - 1):
+                next_img = cv2.pyrDown(img)
+                LP.append(img - cv2.pyrUp(next_img, img.shape[1::-1]))
+                img = next_img
+            LP.append(img)
+            rLPs.append(LP)
+        LPs.append(rLPs)
     return LPs
 
 
 def blend_pyramid(LPs, MPs):
     blended = []
-    for i, MP in enumerate(MPs[0]):
-        for 
-        blended.append(LPA[i] * MP + LPB[i] * (1.0 - MP))
+    for lev, _ in enumerate(MPs[0][0]):
+        for j, M in enumerate(MPs[:][:][lev]):
+            Tot_M+=M[lev]*LPs[j][lev]
+        blended.append(Tot_M)
     return blended
 
 
@@ -95,39 +101,33 @@ def multi_band_blending_arb(img1, img2, sep, leveln=None):
 
 if __name__ == '__main__':
     # construct the argument parse and parse the arguments
-    ap = argparse.ArgumentParser(
-        description="A Python implementation of multi-band blending")
-    ap.add_argument('-f', '--first', required=True,
-                    help="path to the first (left) image")
-    ap.add_argument('-s', '--second', required=True,
-                    help="path to the second (right) image")
-    ap.add_argument('-m', '--mask', required=False,
-                    help="path to the mask image")
-    ap.add_argument('-o', '--overlap', required=True, type=int,
-                    help="width of the overlapped area between two images, \
-                          even number recommended")
-    ap.add_argument('-l', '--leveln', required=False, type=int,
-                    help="number of levels of multi-band blending, \
-                          calculated from image size if not provided")
-    ap.add_argument('-H', '--half', required=False, action='store_true',
-                    help="option to blend the left half of the first image \
-                          and the right half of the second image")
-    args = vars(ap.parse_args())
+    # ap = argparse.ArgumentParser(
+    #     description="A Python implementation of multi-band blending")
+    # ap.add_argument('-f', '--first', required=True,
+    #                 help="path to the first (left) image")
+    # ap.add_argument('-s', '--second', required=True,
+    #                 help="path to the second (right) image")
+    # ap.add_argument('-p', '--seperate', required=True, type=int,
+    #                 help="seperate in each dim")
+    # ap.add_argument('-l', '--leveln', required=False, type=int,
+    #                 help="number of levels of multi-band blending, \
+    #                       calculated from image size if not provided")
+    # args = vars(ap.parse_args())
 
-    flag_half = args['half']
-    img1 = cv2.imread(args['first'])
-    img2 = cv2.imread(args['second'])
-    if args['mask'] != None:
-        mask = cv2.imread(args['mask'])
-        mask = mask//255
-        need_mask = False
-    else:
-        mask = None
-        need_mask =True
-    overlap_w = args['overlap']
-    leveln = args['leveln']
-    print('args: ', args)
+    # sep=args['seperate']
+    # img1 = cv2.imread(args['first'])
+    # img2 = cv2.imread(args['second'])
+    # leveln = args['leveln']
+
+    # print('args: ', args)
     
-    result = multi_band_blending(img1, img2, mask, overlap_w, leveln, flag_half, need_mask)
+    sep=2
+    folder='/Users/chuanborchueh/Documents/Coding/multi-band-blending-python/'
+    img1 = cv2.imread('samples/l.jpg')
+    img2 = cv2.imread('samples/r.jpg')
+    leveln = None
+
+
+    result = multi_band_blending_arb(img1, img2, sep, leveln)
     cv2.imwrite('result.png', result)
     print("blending result has been saved in 'result.png'")
