@@ -5,67 +5,52 @@ import sys
 import argparse
 
 
-def preprocess(img1, img2, overlap_w, flag_half, need_mask=False):
-    if img1.shape[0] != img2.shape[0]:
-        print ("error: image height dimension error")
+def preprocess(imgs, sep):
+
+    Shape = np.array(imgs[0].shape)
+    if Shape[0]%sep != 0:
+        print ("error: sep should be power of 2 error")
         sys.exit()
-    if overlap_w > img1.shape[1] or overlap_w > img2.shape[1]:
-        print ("error: overlapped area too large")
-        sys.exit()
+    subs=[[np.zeros(Shape)]*sep]*sep
+    masks=subs
+    shape=Shape/sep
+    for ind, sub in enumerate(subs):
+        x=ind//sep
+        y=ind%sep
+        sub[x*shape:(x+1)*shape,y*shape:(y+1)*shape]=imgs[ind%2][x*shape:(x+1)*shape,y*shape:(y+1)*shape]
+        masks[x,y][x*shape:(x+1)*shape,y*shape:(y+1)*shape]=1
+    return subs, mask
 
-    w1 = img1.shape[1]
-    w2 = img2.shape[1]
-
-    if flag_half:
-        # combine half of each image
-        shape = np.array(img1.shape)
-        shape[1] = w1 // 2 + w2 // 2
-
-        subA = np.zeros(shape)
-        subA[:, :w1 // 2 + overlap_w // 2] = img1[:, :w1 // 2 + overlap_w // 2]
-        subB = np.zeros(shape)
-        subB[:, w1 // 2 - overlap_w // 2:] = img2[:, w2 - (w2 // 2 + overlap_w // 2):]
-        if need_mask:
-            mask = np.zeros(shape)
-            mask[:, :w1 // 2] = 1
-            return subA, subB, mask
-    else:
-        shape = np.array(img1.shape)
-        shape[1] = w1 + w2 - overlap_w
-
-        subA = np.zeros(shape)
-        subA[:, :w1] = img1
-        subB = np.zeros(shape)
-        subB[:, w1 - overlap_w:] = img2
-        if need_mask:
-            mask = np.zeros(shape)
-            mask[:, :w1 - overlap_w // 2] = 1
-            return subA, subB, mask
-
-    return subA, subB, None
+def GaussianPyramid(masks, leveln):
+    # return GPs: [imgs][levs]
+    GPs=[] 
+    for mask in masks:
+        GP = [mask]
+        for i in range(leveln - 1):
+            GP.append(cv2.pyrDown(GP[i]))
+        GPs.append(GP)
+    return GPs
 
 
-def GaussianPyramid(img, leveln):
-    GP = [img]
-    for i in range(leveln - 1):
-        GP.append(cv2.pyrDown(GP[i]))
-    return GP
-
-
-def LaplacianPyramid(img, leveln):
+def LaplacianPyramid(imgs, leveln):
+    # return LPs: [imgs][levs]
     LP = []
-    for i in range(leveln - 1):
-        next_img = cv2.pyrDown(img)
-        LP.append(img - cv2.pyrUp(next_img, img.shape[1::-1]))
-        img = next_img
-    LP.append(img)
-    return LP
+    LPs=[]
+    for img in imgs:
+        for i in range(leveln - 1):
+            next_img = cv2.pyrDown(img)
+            LP.append(img - cv2.pyrUp(next_img, img.shape[1::-1]))
+            img = next_img
+        LP.append(img)
+        LPs.append(LP)
+    return LPs
 
 
-def blend_pyramid(LPA, LPB, MP):
+def blend_pyramid(LPs, MPs):
     blended = []
-    for i, M in enumerate(MP):
-        blended.append(LPA[i] * M + LPB[i] * (1.0 - M))
+    for i, MP in enumerate(MPs[0]):
+        for 
+        blended.append(LPA[i] * MP + LPB[i] * (1.0 - MP))
     return blended
 
 
@@ -77,18 +62,17 @@ def reconstruct(LS):
     return img
 
 
-def multi_band_blending(img1, img2, mask, overlap_w, leveln=None, flag_half=False, need_mask=False):
-    if overlap_w < 0:
-        print ("error: overlap_w should be a positive integer")
+def multi_band_blending_arb(img1, img2, sep, leveln=None):
+    # assume img1 and img2 are same size
+    imgs=[img1,img2]
+
+    if sep < 0 :
+        print ("error: sep should be a positive integer")
         sys.exit()
 
-    if need_mask:  # no input mask
-        subA, subB, mask = preprocess(img1, img2, overlap_w, flag_half, True)
-    else:  # have input mask
-        subA, subB, _ = preprocess(img1, img2, overlap_w, flag_half)
+    subs, masks = preprocess(imgs, sep)
 
-    max_leveln = int(np.floor(np.log2(min(img1.shape[0], img1.shape[1],
-                                          img2.shape[0], img2.shape[1]))))
+    max_leveln = int(np.floor(np.log2(min(imgs[0].shape[0], imgs[0].shape[1],))))
     if leveln is None:
         leveln = max_leveln
     if leveln < 1 or leveln > max_leveln:
@@ -96,12 +80,11 @@ def multi_band_blending(img1, img2, mask, overlap_w, leveln=None, flag_half=Fals
         leveln = max_leveln
 
     # Get Gaussian pyramid and Laplacian pyramid
-    MP = GaussianPyramid(mask, leveln)
-    LPA = LaplacianPyramid(subA, leveln)
-    LPB = LaplacianPyramid(subB, leveln)
+    MP = GaussianPyramid(masks, leveln)
+    LPs = LaplacianPyramid(subs, leveln)
 
     # Blend two Laplacian pyramidspass
-    blended = blend_pyramid(LPA, LPB, MP)
+    blended = blend_pyramid(LPs, MP)
 
     # Reconstruction process
     result = reconstruct(blended)
