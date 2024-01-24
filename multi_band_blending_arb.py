@@ -6,56 +6,56 @@ import argparse
 
 
 def preprocess(imgs, sep):
-
+    cv2.imwrite('img_1.png', imgs[0])
+    cv2.imwrite('img_2.png', imgs[1])
     Shape = np.array(imgs[0].shape)
     if Shape[0]%sep != 0:
         print ("error: sep should be power of 2 error")
         sys.exit()
-    subs=[[np.zeros(Shape)]*sep]*sep
-    masks=subs
+    subs=[np.zeros(Shape) for i in range(sep*sep)]
+    masks=[np.zeros(Shape) for i in range(sep*sep)]
     shape=Shape[0]//sep
-    for indx, sub in enumerate(subs):
-        for indy, s in enumerate(sub):
-            s[indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]=imgs[indx%2][indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]
-            masks[indx][indy][indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]=1
+    for ind, sub in enumerate(subs):
+        indx=ind%sep
+        indy=ind//sep
+        sub[indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]=imgs[ind%2][indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]
+        masks[ind][indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]=1
+        temp=np.ndarray.copy(sub)
+        # temp[temp==1]=255
+        cv2.imwrite('temp_' + str(ind) +'.png', temp)
     return subs, masks
 
 def GaussianPyramid(masks, leveln):
     # return GPs: [imgs][levs]
     GPs=[]
-    for rmask in masks:
-        rGPs=[] 
-        for mask in rmask:
-            GP = [mask]
-            for i in range(leveln - 1):
-                GP.append(cv2.pyrDown(GP[i]))
-            rGPs.append(GP)
-        GPs.append(rGPs)
+    for mask in masks:
+        GP = [mask]
+        for i in range(leveln - 1):
+            GP.append(cv2.pyrDown(GP[i]))
+        GPs.append(GP)
     return GPs
 
 
 def LaplacianPyramid(imgs, leveln):
     # return LPs: [imgs][levs]
     LPs=[]
-    for rimg in imgs:
-        for img in rimg:
-            rLPs=[]
-            LP = []
-            for i in range(leveln - 1):
-                next_img = cv2.pyrDown(img)
-                LP.append(img - cv2.pyrUp(next_img, img.shape[1::-1]))
-                img = next_img
-            LP.append(img)
-            rLPs.append(LP)
-        LPs.append(rLPs)
+    for img in imgs:
+        LP = []
+        for i in range(leveln - 1):
+            next_img = cv2.pyrDown(img)
+            LP.append(img - cv2.pyrUp(next_img, img.shape[1::-1]))
+            img = next_img
+        LP.append(img)
+        LPs.append(LP)
     return LPs
 
 
 def blend_pyramid(LPs, MPs):
     blended = []
-    for lev, _ in enumerate(MPs[0][0]):
-        for j, M in enumerate(MPs[:][:][lev]):
-            Tot_M+=M[lev]*LPs[j][lev]
+    for lev in range(len(MPs[0])):
+        Tot_M=np.zeros(LPs[0][lev].shape)
+        for ind in range(len(MPs)):
+            Tot_M+=np.array(MPs[ind][lev]*LPs[ind][lev])
         blended.append(Tot_M)
     return blended
 
@@ -121,7 +121,7 @@ if __name__ == '__main__':
 
     # print('args: ', args)
     
-    sep=2
+    sep=4
     folder='/Users/chuanborchueh/Documents/Coding/multi-band-blending-python/'
     img1 = cv2.imread('samples/l.jpg')
     img2 = cv2.imread('samples/r.jpg')
