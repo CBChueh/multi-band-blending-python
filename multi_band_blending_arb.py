@@ -5,7 +5,7 @@ import sys
 import argparse
 
 
-def preprocess(imgs, sep):
+def preprocess(imgs, sep, overlap):
     cv2.imwrite('img_1.png', imgs[0])
     cv2.imwrite('img_2.png', imgs[1])
     Shape = np.array(imgs[0].shape)
@@ -15,10 +15,15 @@ def preprocess(imgs, sep):
     subs=[np.zeros(Shape) for i in range(sep*sep)]
     masks=[np.zeros(Shape) for i in range(sep*sep)]
     shape=Shape[0]//sep
+    overlap_w=int(overlap*shape)
     for ind, sub in enumerate(subs):
         indx=ind%sep
         indy=ind//sep
-        sub[indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]=imgs[ind%2][indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]
+        xmin=max(0,indx*shape-overlap_w)
+        xmax=min(Shape[0],(indx+1)*shape+overlap_w)
+        ymin=max(0,indy*shape-overlap_w)
+        ymax=min(Shape[1],(indy+1)*shape+overlap_w)
+        sub[xmin:xmax,ymin:ymax]=imgs[abs(indy%2)][xmin:xmax,ymin:ymax]
         masks[ind][indx*shape:(indx+1)*shape,indy*shape:(indy+1)*shape]=1
         temp=np.ndarray.copy(sub)
         # temp[temp==1]=255
@@ -68,7 +73,7 @@ def reconstruct(LS):
     return img
 
 
-def multi_band_blending_arb(img1, img2, sep, leveln=None):
+def multi_band_blending_arb(img1, img2, sep, overlap, leveln=None):
     # assume img1 and img2 are same size
     imgs=[img1,img2]
 
@@ -76,7 +81,7 @@ def multi_band_blending_arb(img1, img2, sep, leveln=None):
         print ("error: sep should be a positive integer")
         sys.exit()
 
-    subs, masks = preprocess(imgs, sep)
+    subs, masks = preprocess(imgs, sep, overlap)
 
     max_leveln = int(np.floor(np.log2(min(imgs[0].shape[0], imgs[0].shape[1],))))
     if leveln is None:
@@ -100,34 +105,13 @@ def multi_band_blending_arb(img1, img2, sep, leveln=None):
     return result.astype(np.uint8)
 
 if __name__ == '__main__':
-    # construct the argument parse and parse the arguments
-    # ap = argparse.ArgumentParser(
-    #     description="A Python implementation of multi-band blending")
-    # ap.add_argument('-f', '--first', required=True,
-    #                 help="path to the first (left) image")
-    # ap.add_argument('-s', '--second', required=True,
-    #                 help="path to the second (right) image")
-    # ap.add_argument('-p', '--seperate', required=True, type=int,
-    #                 help="seperate in each dim")
-    # ap.add_argument('-l', '--leveln', required=False, type=int,
-    #                 help="number of levels of multi-band blending, \
-    #                       calculated from image size if not provided")
-    # args = vars(ap.parse_args())
-
-    # sep=args['seperate']
-    # img1 = cv2.imread(args['first'])
-    # img2 = cv2.imread(args['second'])
-    # leveln = args['leveln']
-
-    # print('args: ', args)
-    
     sep=4
     folder='/Users/chuanborchueh/Documents/Coding/multi-band-blending-python/'
     img1 = cv2.imread('samples/l.jpg')
     img2 = cv2.imread('samples/r.jpg')
-    leveln = None
+    leveln = 8
+    overlap = 0.5
 
-
-    result = multi_band_blending_arb(img1, img2, sep, leveln)
+    result = multi_band_blending_arb(img1, img2, sep, overlap, leveln)
     cv2.imwrite('result.png', result)
     print("blending result has been saved in 'result.png'")
